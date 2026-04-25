@@ -1,0 +1,11 @@
+# .antigravityignore
+node_modules/
+.next/
+.git/
+dist/
+build/
+coverage/
+*.log
+npm-debug.log*
+.npm/.next/
+node_modules/
