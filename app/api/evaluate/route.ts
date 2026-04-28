@@ -13,6 +13,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 export const POST = async (request: NextRequest) => {
   const requestId = crypto.randomUUID();
   const headers = { 'X-Request-ID': requestId };
+  const startTime = Date.now();
 
   try {
     const ip = request.headers.get('x-forwarded-for') || 'anonymous';
@@ -45,6 +46,13 @@ export const POST = async (request: NextRequest) => {
       return NextResponse.json({ error: outputGuard.reason }, { status: 502, headers });
     }
 
+    console.log(JSON.stringify({
+      severity: 'INFO',
+      service: 'elected',
+      route: '/api/evaluate',
+      durationMs: Date.now() - startTime,
+      requestId,
+    }));
     return NextResponse.json({ evaluation: outputGuard.data }, { headers });
   } catch (error: unknown) {
     const message = error instanceof Error && error.message === 'Failed to parse AI response'

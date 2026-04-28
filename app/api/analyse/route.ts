@@ -13,6 +13,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 export const POST = async (request: NextRequest) => {
   const requestId = crypto.randomUUID();
   const headers = { 'X-Request-ID': requestId };
+  const startTime = Date.now();
 
   try {
     // Rate limit check
@@ -46,6 +47,13 @@ export const POST = async (request: NextRequest) => {
       return NextResponse.json({ error: outputGuard.reason }, { status: 502, headers });
     }
 
+    console.log(JSON.stringify({
+      severity: 'INFO',
+      service: 'elected',
+      route: '/api/analyse',
+      durationMs: Date.now() - startTime,
+      requestId,
+    }));
     return NextResponse.json({ analysis: outputGuard.data }, { headers });
   } catch (error: unknown) {
     const message = error instanceof Error && (

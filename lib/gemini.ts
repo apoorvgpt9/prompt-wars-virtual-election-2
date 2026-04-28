@@ -1,32 +1,40 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { VertexAI } from '@google-cloud/vertexai';
 
 /**
- * Initializes the Gemini API client.
- * GEMINI_API_KEY is accessed only via process.env.GEMINI_API_KEY server-side.
- * Never import or use this in client components.
- */
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-/**
- * Calls the Gemini API with a system prompt and user message.
- * Uses gemini-3-flash-preview with a configurable timeout (default 30 seconds).
- * Errors are caught and re-thrown as safe generic messages.
+ * Calls Gemini Pro via Vertex AI using service account IAM auth.
+ * No API key required — authenticates via Application Default Credentials.
+ * The VertexAI client is instantiated lazily at call-time so that the
+ * Next.js build phase does not require GOOGLE_CLOUD_PROJECT to be set.
+ * Retries up to 3 times on 503 with exponential backoff.
  * @param systemPrompt The instruction for the AI agent.
  * @param userMessage The user's input or context to process.
  * @param timeoutMs Timeout in milliseconds. Default is 30000 (30 seconds).
+ * @param retries Number of retry attempts on transient failures. Default is 3.
  * @returns The AI's response as a raw text string.
  */
 export const callGemini = async (
   systemPrompt: string,
   userMessage: string,
-  timeoutMs: number = 30000,
-  retries: number = 3
+  timeoutMs = 30000,
+  retries = 3
 ): Promise<string> => {
+  const vertex = new VertexAI({
+    project: process.env.GOOGLE_CLOUD_PROJECT!,
+    location: process.env.VERTEX_LOCATION || 'us-central1',
+  });
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-3-flash-preview',
-        systemInstruction: systemPrompt,
+      const model = vertex.getGenerativeModel({
+        model: 'gemini-2.5-pro',
+        systemInstruction: {
+          role: 'system',
+          parts: [{ text: systemPrompt }],
+        },
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.3,
+        },
       });
 
       const controller = new AbortController();
@@ -37,25 +45,16 @@ export const callGemini = async (
       });
 
       clearTimeout(timeoutId);
-      return result.response.text();
+      return result.response.candidates![0].content.parts[0].text!;
 
     } catch (error: unknown) {
-      // TEMPORARY: Added for development debugging. REMOVE BEFORE DEPLOYMENT.
-      console.error('[Gemini API Error]:', error);
-
-      const isThrottled = error instanceof Error && (
-        error.message.includes('503') || 
-        error.message.includes('429') ||
-        error.message.includes('RESOURCE_EXHAUSTED')
-      );
+      console.error('GEMINI ERROR:', error);  // ADD THIS LINE
+      const is503 = error instanceof Error && error.message.includes('503');
       const isLastAttempt = attempt === retries;
-
-      if (isThrottled && !isLastAttempt) {
-        // Exponential backoff: 2s, 4s, 8s...
+      if (is503 && !isLastAttempt) {
         await new Promise(res => setTimeout(res, 2000 * attempt));
         continue;
       }
-
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('AI request timed out');
       }
@@ -63,39 +62,4 @@ export const callGemini = async (
     }
   }
   throw new Error('Failed to communicate with AI service');
-}
-
-/**
- * Streaming variant of the Gemini API call.
- * Yields response text chunks as they arrive from the API.
- * Use this for long-form content where progressive rendering improves UX.
- * @param systemPrompt The instruction for the AI agent.
- * @param userMessage The user's input or context to process.
- * @returns An async generator yielding response text chunks.
- */
-export async function* streamGemini(
-  systemPrompt: string,
-  userMessage: string
-): AsyncGenerator<string> {
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-3-flash-preview',
-    systemInstruction: systemPrompt,
-  });
-
-  try {
-    const result = await model.generateContentStream({
-      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-    });
-
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      if (chunkText) {
-        yield chunkText;
-      }
-    }
-  } catch (error: unknown) {
-    // TEMPORARY: Added for development debugging. REMOVE BEFORE DEPLOYMENT.
-    console.error('[Gemini Stream Error]:', error);
-    throw new Error('Failed to stream AI response');
-  }
-}
+};

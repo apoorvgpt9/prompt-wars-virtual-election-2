@@ -6,9 +6,9 @@ export interface InputGuardResult {
   sanitized?: string;
 }
 
-export interface OutputGuardResult<T> {
+export interface OutputGuardResult {
   valid: boolean;
-  data?: T;
+  data?: unknown;
   reason?: string;
   outOfDomain?: boolean;
   unsafeInput?: boolean;
@@ -36,7 +36,7 @@ export const validateInput = (text: string): InputGuardResult => {
 };
 
 /** validateOutput — Layer 3 output gate */
-export const validateOutput = <T>(text: string): OutputGuardResult<T> => {
+export const validateOutput = (text: string): OutputGuardResult => {
   let parsed: unknown;
   try {
     const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
@@ -58,5 +58,5 @@ export const validateOutput = <T>(text: string): OutputGuardResult<T> => {
       return { valid: false, reason: `Response field "${key}" exceeded allowed length.` };
   }
 
-  return { valid: true, data: parsed as T };
+  return { valid: true, data: parsed };
 };

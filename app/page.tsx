@@ -9,6 +9,10 @@ import { ModuleList } from '@/components/module-list';
 import { QuizCard } from '@/components/quiz-card';
 import { FeedbackCard } from '@/components/feedback-card';
 import { GraduationCap, AlertCircle } from 'lucide-react';
+import { AuthGate } from '@/components/auth-gate';
+import { signOutUser } from '@/lib/firebase-client';
+import { saveSession } from '@/lib/firestore';
+import { User } from 'firebase/auth';
 
 type Stage = 'idle' | 'analysing' | 'building' | 'learning' | 'evaluating' | 'feedback';
 
@@ -24,6 +28,7 @@ export default function Home() {
   const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
   const [evaluation, setEvaluation] = useState<EvaluatorOutput>();
   const [error, setError] = useState<string | null>(null);
+  const currentUserRef = useRef<User | null>(null);
 
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +93,15 @@ export default function Home() {
       if (!evaluateRes.ok) throw new Error(evaluateData.error || 'Failed to evaluate answer');
       setEvaluation(evaluateData.evaluation);
       setStage('feedback');
+      // Persist session to Firestore after successful evaluation
+      if (currentUserRef.current) {
+        saveSession(
+          currentUserRef.current.uid,
+          topic,
+          evaluateData.evaluation.correct,
+          evaluateData.evaluation.feedback
+        ).catch(() => { /* session save is best-effort */ });
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setStage('learning');
@@ -111,6 +125,11 @@ export default function Home() {
   };
 
   return (
+    <AuthGate>
+      {(authedUser: User) => {
+        // Keep ref in sync so event handlers outside the render-prop scope can access it
+        currentUserRef.current = authedUser;
+        return (
     <main className="min-h-screen bg-background text-foreground selection:bg-primary/20">
       <a
         href="#main-content"
@@ -131,9 +150,18 @@ export default function Home() {
             </div>
             <h1 className="text-xl font-black tracking-tighter uppercase">{ACTIVE_CONFIG.appName}</h1>
           </button>
-          <p className="hidden sm:block text-sm font-medium text-muted-foreground italic">
-            {topic ? `Topic: ${topic}` : ACTIVE_CONFIG.tagline}
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="hidden sm:block text-sm font-medium text-muted-foreground italic">
+              {topic ? `Topic: ${topic}` : ACTIVE_CONFIG.tagline}
+            </p>
+            <button
+              onClick={signOutUser}
+              className="text-slate-400 hover:text-white text-sm transition-colors"
+              aria-label="Sign out"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -211,5 +239,8 @@ export default function Home() {
         </div>
       </footer>
     </main>
+      );
+      }}
+    </AuthGate>
   );
 }
