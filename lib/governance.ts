@@ -65,9 +65,16 @@ export const validateInput = (text: string): InputGuardResult => {
 export const validateOutput = (text: string): OutputGuardResult => {
   let parsed: unknown;
   try {
-    const clean = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+    let clean = text.trim();
+    // Try to extract JSON if it's wrapped in other text or markdown
+    const jsonMatch = clean.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (jsonMatch) {
+      clean = jsonMatch[0];
+    }
     parsed = JSON.parse(clean);
-  } catch {
+  } catch (err) {
+    console.error('JSON Parse Error:', err);
+    console.error('Raw AI Text that failed to parse:', text);
     return { valid: false, reason: 'AI returned an unexpected response format.' };
   }
 

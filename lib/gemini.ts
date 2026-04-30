@@ -1,5 +1,5 @@
 /** Vertex AI Gemini client — server-side only; never import in client components. */
-import { VertexAI } from '@google-cloud/vertexai';
+import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 
 /**
  * Calls Gemini Pro via Vertex AI using service account IAM auth.
@@ -33,9 +33,16 @@ export const callGemini = async (
           parts: [{ text: systemPrompt }],
         },
         generationConfig: {
-          maxOutputTokens: 2048,
+          maxOutputTokens: 8192,
           temperature: 0.3,
+          responseMimeType: 'application/json',
         },
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }
+        ],
       });
 
       const controller = new AbortController();
@@ -46,7 +53,13 @@ export const callGemini = async (
       });
 
       clearTimeout(timeoutId);
-      return result.response.candidates![0].content.parts[0].text!;
+      
+      const candidate = result.response.candidates![0];
+      if (candidate.finishReason === 'SAFETY' || !candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        return '{"error": "UNSAFE_INPUT"}';
+      }
+      
+      return candidate.content.parts[0].text!;
 
     } catch (error: unknown) {
       const is503 = error instanceof Error && error.message.includes('503');
