@@ -1,7 +1,6 @@
-/**
- * In-memory rate limiter for API routes.
- * Tracks requests per IP and cleans up every 60 seconds.
- */
+/** In-memory sliding-window rate limiter for Next.js API routes. */
+
+/** Tracks request counts and reset timestamps keyed by IP address. */
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 
 /**

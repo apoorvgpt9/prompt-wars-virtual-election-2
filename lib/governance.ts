@@ -1,22 +1,42 @@
+/** Input/output governance layer — validates and sanitises all AI traffic before and after Gemini calls. */
 import { sanitizeInput, hasPromptInjection } from './validation';
 
+/**
+ * Result returned by {@link validateInput} after the Layer-1 gate check.
+ */
 export interface InputGuardResult {
+  /** Whether the input passed all safety and domain checks. */
   safe: boolean;
+  /** Human-readable explanation when `safe` is false. */
   reason?: string;
+  /** Sanitized version of the original input, present only when `safe` is true. */
   sanitized?: string;
 }
 
+/**
+ * Result returned by {@link validateOutput} after the Layer-3 gate check.
+ */
 export interface OutputGuardResult {
+  /** Whether the AI output passed all validity and length checks. */
   valid: boolean;
+  /** The parsed JSON payload, present only when `valid` is true. */
   data?: unknown;
+  /** Human-readable explanation when `valid` is false. */
   reason?: string;
+  /** True when the AI returned an OUT_OF_DOMAIN error sentinel. */
   outOfDomain?: boolean;
+  /** True when the AI returned an UNSAFE_INPUT error sentinel. */
   unsafeInput?: boolean;
 }
 
 const ELECTION_KEYWORDS = /elect|vote|voter|ballot|candidate|polling|booth|evm|vvpat|eci|commission|constituency|parliament|lok\s?sabha|vidhan|assembly|nomination|campaign|result|count|register|registration|civic|democracy|democratic|party|manifesto|mcc|model\s?code|form\s?6|process|rules|rights|conduct|booth|station/i;
 
-/** validateInput — Layer 1 input gate */
+/**
+ * Sanitises raw user text, enforces 3–200 character bounds, detects prompt-injection,
+ * and confirms the query is relevant to the Indian election domain.
+ * @param text - Raw input string submitted by the user.
+ * @returns An {@link InputGuardResult} indicating whether the input is safe to forward to Gemini.
+ */
 export const validateInput = (text: string): InputGuardResult => {
   const sanitized = sanitizeInput(text);
 
@@ -35,7 +55,13 @@ export const validateInput = (text: string): InputGuardResult => {
   return { safe: true, sanitized };
 };
 
-/** validateOutput — Layer 3 output gate */
+/**
+ * Strips markdown fences, JSON-parses the AI response, checks for sentinel error
+ * values (OUT_OF_DOMAIN / UNSAFE_INPUT), and enforces per-field length limits.
+ * @param text - Raw text string returned by the Gemini model.
+ * @returns An {@link OutputGuardResult} with the parsed payload on success,
+ *   or a failure description with optional sentinel flags on error.
+ */
 export const validateOutput = (text: string): OutputGuardResult => {
   let parsed: unknown;
   try {

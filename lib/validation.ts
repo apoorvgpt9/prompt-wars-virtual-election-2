@@ -1,3 +1,4 @@
+/** Zod schemas and TypeScript types for all API request and response shapes. */
 import { z } from 'zod';
 
 /**
@@ -36,6 +37,7 @@ export const AnalystOutputSchema = z.object({
   userContext: z.string(),
   complexity: z.enum(['Beginner', 'Intermediate', 'Advanced']),
 });
+/** TypeScript type inferred from {@link AnalystOutputSchema} for use across the codebase. */
 export type AnalystOutput = z.infer<typeof AnalystOutputSchema>;
 
 /**
@@ -64,6 +66,7 @@ export const BuilderOutputSchema = z.object({
   ),
   estimatedTime: z.string(),
 });
+/** TypeScript type inferred from {@link BuilderOutputSchema} for use across the codebase. */
 export type BuilderOutput = z.infer<typeof BuilderOutputSchema>;
 
 /**
@@ -75,6 +78,7 @@ export const EvaluatorOutputSchema = z.object({
   encouragement: z.string(),
   nextStep: z.string(),
 });
+/** TypeScript type inferred from {@link EvaluatorOutputSchema} for use across the codebase. */
 export type EvaluatorOutput = z.infer<typeof EvaluatorOutputSchema>;
 
 /**

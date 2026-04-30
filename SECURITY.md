@@ -1,7 +1,7 @@
 # Security Policy — ElectEd
 
-## API Key Management
-The `GEMINI_API_KEY` is strictly managed as a server-side environment variable. It is accessed only via `process.env.GEMINI_API_KEY` within the `/lib/` directory (specifically `lib/gemini.ts`). The key is never exposed to the client-side code, and Next.js environment variable prefixing (e.g., `NEXT_PUBLIC_`) is avoided for this secret.
+## Authentication & Access Management
+All AI calls use Google Cloud Vertex AI with service account IAM authentication — no API keys in source code or environment variables. The Cloud Run service account is granted `roles/aiplatform.user` to access Vertex AI. Locally, authentication uses Application Default Credentials via `gcloud auth application-default login`. Firebase Authentication credentials (`NEXT_PUBLIC_FIREBASE_*`) are public-safe web config values as per Firebase's security model. Firebase Admin credentials are server-side only and never exposed to the client.
 
 ## Input Validation
 All user inputs are validated at multiple layers:

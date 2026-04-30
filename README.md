@@ -101,6 +101,7 @@ No raw AI output ever reaches the client without passing this chain.
 │       └── health/route.ts      # Health check endpoint (used by Docker HEALTHCHECK)
 │
 ├── components/
+│   ├── auth-gate.tsx            # Client-side authentication guard
 │   ├── structured-input.tsx     # Topic entry with preset chips (no free-form drift)
 │   ├── analysis-card.tsx        # Displays analyst output with skeleton loader
 │   ├── module-list.tsx          # Tabbed module browser + ElectionTimeline integration
@@ -110,6 +111,9 @@ No raw AI output ever reaches the client without passing this chain.
 │   └── streaming-text.tsx       # Progressive text reveal for long AI responses
 │
 ├── lib/
+│   ├── firebase-client.ts       # Firebase Client SDK initialisation
+│   ├── firebase-admin.ts        # Firebase Admin SDK (server-side)
+│   ├── firestore.ts             # Firestore data access layer
 │   ├── gemini.ts                # Gemini API wrapper with retry + timeout + streaming
 │   ├── governance.ts            # validateInput() + validateOutput() — the safety gates
 │   ├── prompts.ts               # All system prompts + GOVERNANCE_CLAUSES (never inlined)
@@ -146,7 +150,7 @@ No raw AI output ever reaches the client without passing this chain.
 3. Caps individual field lengths at 1000 characters to prevent runaway AI text.
 
 #### `lib/gemini.ts` — Resilient API Client
-- Uses `gemini-3-flash-preview` exclusively (enforced in GEMINI.md).
+- Uses `gemini-2.5-pro via Vertex AI with service account IAM authentication` (enforced in GEMINI.md).
 - Implements exponential backoff retry (2s, 4s, 8s) for 429 / 503 / RESOURCE_EXHAUSTED responses.
 - Supports both one-shot (`callGemini`) and streaming (`streamGemini`) invocation.
 - Uses `AbortController` + `setTimeout` for 30-second request timeout.
@@ -168,10 +172,13 @@ Six distinct UI stages managed via a single `stage` state variable. Each stage t
 
 | Service | How It's Used |
 |---|---|
-| **Gemini API** (`gemini-3-flash-preview`) | Powers all three agents (Analyst, Builder, Evaluator) via `@google/generative-ai` SDK |
-| **Google Cloud Run** (`asia-south1`) | Production deployment target — containerised with Docker, auto-scaled |
+| **Vertex AI** (`gemini-2.5-pro`) | Powers all three agents (Analyst, Builder, Evaluator) using Vertex AI SDK in `us-central1` |
+| **Firebase Authentication** | Mandatory Google Sign-In for all users with secure session management |
+| **Cloud Firestore** | Persistent storage for user sessions, learning progress, and quiz history |
+| **Cloud Logging** | Structured JSON logging for production observability and audit trails |
+| **Google Cloud Run** | Production deployment target — containerised with Docker, auto-scaled |
 | **Google Cloud Build** | CI/CD pipeline for building and pushing container images |
-| **Content Security Policy** | `connect-src` explicitly allows `generativelanguage.googleapis.com` (Gemini endpoint) while blocking all other external origins |
+| **Cloud IAM** | Service account based authentication for Vertex AI access (no API keys in production) |
 
 ---
 
@@ -185,9 +192,9 @@ Six distinct UI stages managed via a single `stage` state variable. Each stage t
 5. **6–8 timeline items.** The Builder is constrained to produce between 6 and 8 election process steps, ensuring the visual timeline is always substantive but never unwieldy.
 
 ### Technical
-6. **Server-side API key only.** `GEMINI_API_KEY` is never available client-side. All Gemini calls route through Next.js API routes. This is a hard architectural constraint, not a best-effort guideline.
+6. **Vertex AI IAM authentication.** All Gemini calls use Cloud Run service account credentials via `@google-cloud/vertexai` — no API keys in source code or environment variables. Authentication is handled by Google Cloud IAM.
 7. **In-memory rate limiting.** The rate limiter uses a `Map` — not Redis or a distributed store. This means rate limits are per-instance and reset on serverless cold starts. Acceptable for a demo/MVP; a production system at scale would use Cloud Memorystore.
-8. **No authentication.** ElectEd is a public-facing civic education tool. No login or user accounts are required or implemented.
+8. **Mandatory Google Sign-In via Firebase Authentication.** All users must authenticate to access the learning platform.
 9. **Standalone Next.js output.** `output: 'standalone'` in `next.config.mjs` is required for the multi-stage Docker build to produce a minimal, self-contained production image without shipping `node_modules`.
 10. **Non-root container user.** The Docker runner stage creates a dedicated `nextjs` system user (uid 1001) and runs the process under that user — standard container security hardening.
 
@@ -200,29 +207,48 @@ Six distinct UI stages managed via a single `stage` state variable. Each stage t
 ## Running Locally
 
 ```bash
-# 1. Install dependencies
+# 1. Authenticate with Google Cloud
+gcloud auth application-default login
+
+# 2. Install dependencies
 npm install
 
-# 2. Set your API key
+# 3. Setup environment variables
 cp .env.example .env.local
-# Edit .env.local and add: GEMINI_API_KEY=your_key_here
+# Edit .env.local with the variables below
 
-# 3. Start the dev server
+# 4. Start the dev server
 npm run dev
 # → http://localhost:3000
 
-# 4. Run tests
+# 5. Run tests
 npm test
 
-# 5. Lint check
+# 6. Lint check
 npm run lint
 ```
+
+### Environment Variables
+
+| Variable | Description |
+|---|---|
+| `GOOGLE_CLOUD_PROJECT` | Your GCP Project ID |
+| `VERTEX_LOCATION` | Vertex AI region (e.g., `us-central1`) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase Client API Key |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase Auth Domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase Project ID |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`| Firebase Storage Bucket |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Firebase Messaging ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase App ID |
+| `FIREBASE_ADMIN_PROJECT_ID` | Firebase Admin Project ID |
+| `FIREBASE_ADMIN_CLIENT_EMAIL` | Firebase Admin Service Account Email |
+| `FIREBASE_ADMIN_PRIVATE_KEY` | Firebase Admin Private Key |
 
 ## Running with Docker
 
 ```bash
 docker build -t elected .
-docker run -p 3000:3000 -e GEMINI_API_KEY=your_key_here elected
+docker run -p 3000:3000 -e GOOGLE_CLOUD_PROJECT=your_project -e VERTEX_LOCATION=us-central1 elected
 # → http://localhost:3000
 ```
 
@@ -235,10 +261,10 @@ gcloud builds submit --tag gcr.io/PROJECT_ID/elected
 # Deploy to Cloud Run (asia-south1)
 gcloud run deploy elected \
   --image gcr.io/PROJECT_ID/elected \
-  --region asia-south1 \
+  --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=your_key_here
+  --set-env-vars GOOGLE_CLOUD_PROJECT=your_project_id,VERTEX_LOCATION=us-central1
 ```
 
 ---
@@ -252,7 +278,7 @@ gcloud run deploy elected \
 | **Efficiency** | Exponential backoff retry prevents thundering-herd on Gemini throttling; `output: standalone` Docker build minimises image size; in-memory rate limiter with O(n) cleanup on each request; streaming API available for long-form content |
 | **Testing** | 7 test files covering governance (pure function), validation schemas, all 3 API routes (Gemini mocked), and a UI component interaction test; `npm test` exits 0; no real API calls in test suite |
 | **Accessibility** | Skip-to-content link; single `h1` per page with logical `h2/h3` hierarchy; `aria-live="polite"` on all AI-updated regions; `role="alert"` on error messages; keyboard-navigable interactive elements with visible focus rings; skeleton loaders between every agent call |
-| **Google Services** | Gemini API (`gemini-3-flash-preview`) powers all three agents; CSP explicitly scopes `connect-src` to `generativelanguage.googleapis.com`; deployed on Google Cloud Run (`asia-south1`) via Cloud Build |
+| **Google Services** | Vertex AI (`gemini-2.5-pro`), Firebase Auth, Cloud Firestore, Cloud Logging, Cloud Run, Cloud Build, Cloud IAM |
 
 ---
 

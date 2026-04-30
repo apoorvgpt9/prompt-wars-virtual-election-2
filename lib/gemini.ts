@@ -1,3 +1,4 @@
+/** Vertex AI Gemini client — server-side only; never import in client components. */
 import { VertexAI } from '@google-cloud/vertexai';
 
 /**
@@ -48,7 +49,6 @@ export const callGemini = async (
       return result.response.candidates![0].content.parts[0].text!;
 
     } catch (error: unknown) {
-      console.error('GEMINI ERROR:', error);  // ADD THIS LINE
       const is503 = error instanceof Error && error.message.includes('503');
       const isLastAttempt = attempt === retries;
       if (is503 && !isLastAttempt) {

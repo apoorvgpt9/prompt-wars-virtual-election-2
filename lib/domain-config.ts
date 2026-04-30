@@ -1,15 +1,20 @@
-/**
- * Configuration for the application domain.
- * Defines the expert persona and content structure.
- */
+/** Domain configuration definitions and the active config exported for app-wide use. */
 export interface DomainConfig {
+  /** Human-readable name of the subject domain (e.g. 'Indian Election Process'). */
   domain: string;
+  /** The AI persona string injected into every system prompt (e.g. 'ECI Education Specialist'). */
   expertRole: string;
+  /** Number of learning modules the Builder agent should generate. */
   moduleCount: number;
+  /** Label displayed above the topic input field in the UI. */
   inputLabel: string;
+  /** Placeholder text shown inside the topic input field. */
   inputPlaceholder: string;
+  /** Display name of the application shown in headings and metadata. */
   appName: string;
+  /** Short marketing tagline shown beneath the app name. */
   tagline: string;
+  /** Suggested topic chips shown to the user on the landing page. */
   topics: string[];
 }
 

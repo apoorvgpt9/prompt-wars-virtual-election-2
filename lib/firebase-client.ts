@@ -1,3 +1,4 @@
+/** Client-side Firebase authentication helpers — browser use only, not for server components. */
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, type Auth } from 'firebase/auth';
 
@@ -27,11 +28,13 @@ const getFirebaseApp = (): FirebaseApp => {
  */
 export const getFirebaseAuth = (): Auth => getAuth(getFirebaseApp());
 
+/** Pre-configured Google OAuth 2.0 provider instance shared across sign-in calls. */
 export const googleProvider = new GoogleAuthProvider();
 
 /**
- * Opens Google Sign-In popup. Returns Firebase User on success.
- * Throws on cancellation or error.
+ * Opens the Google Sign-In popup and returns the authenticated Firebase user.
+ * @returns A promise resolving to the signed-in Firebase {@link https://firebase.google.com/docs/reference/js/auth.user User}.
+ * @throws {Error} When the user cancels the popup or an OAuth error occurs.
  */
 export const signInWithGoogle = async () => {
   const result = await signInWithPopup(getFirebaseAuth(), googleProvider);
@@ -39,7 +42,9 @@ export const signInWithGoogle = async () => {
 };
 
 /**
- * Signs out the current user.
+ * Signs the current user out of Firebase Auth.
+ * @returns A promise that resolves once the sign-out is complete.
+ * @throws {Error} When sign-out fails due to a Firebase Auth error.
  */
 export const signOutUser = async () => {
   await signOut(getFirebaseAuth());

@@ -1,3 +1,4 @@
+/** Client-side Firestore helpers for persisting and retrieving user learning sessions. */
 import { getFirestore, doc, setDoc, getDoc, type Firestore } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 
@@ -21,11 +22,13 @@ const getDb = (): Firestore => {
 
 /**
  * Saves the user's learning session to Firestore.
- * Collection: sessions / userId / records / timestamp
- * @param userId Firebase UID of the authenticated user.
- * @param topic The topic the user studied.
- * @param score Whether the quiz answer was correct.
- * @param feedback The evaluator feedback string.
+ * Collection path: sessions/{userId}/records/{timestamp}
+ * @param userId - Firebase UID of the authenticated user.
+ * @param topic - The election topic the user studied.
+ * @param score - Whether the quiz answer was correct.
+ * @param feedback - The evaluator feedback string returned by the AI.
+ * @returns A promise that resolves when the document has been written.
+ * @throws {Error} When the Firestore write fails due to network or permission errors.
  */
 export const saveSession = async (
   userId: string,
@@ -43,9 +46,10 @@ export const saveSession = async (
 };
 
 /**
- * Loads the most recent session for a user.
- * @param userId Firebase UID of the authenticated user.
- * @returns Session data or null if none exists.
+ * Loads the most recent session record for a user from Firestore.
+ * @param userId - Firebase UID of the authenticated user.
+ * @returns The session data as a key-value map, or null if no session exists.
+ * @throws {Error} When the Firestore read fails due to network or permission errors.
  */
 export const getLastSession = async (userId: string): Promise<Record<string, unknown> | null> => {
   const ref = doc(getDb(), 'sessions', userId, 'meta', 'latest');

@@ -1,3 +1,4 @@
+/** System prompt templates and shared governance clauses for all Gemini agent calls. */
 import { DomainConfig } from './domain-config';
 
 /**

@@ -1,3 +1,4 @@
+/** Firebase Admin SDK initialisation — server-side only; never import in client components. */
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
